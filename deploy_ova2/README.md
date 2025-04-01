@@ -52,6 +52,6 @@ To use this script, ensure the following dependencies are met:
 ## Author
 
 Denis Chertkov\
-denis\@chertkov.info
-version 1.05
+denis\@chertkov.info\
+version 1.06\
 Date: [2025-03-28]

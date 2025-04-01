@@ -25,8 +25,8 @@
 #   - ESXi host must be accessible and credentials must be valid.
 #
 # Author: Denis Chertkov, denis@chertkov.info
-# version 1.05
-# Date: [2025-03-28]
+# version 1.06
+# Date: [2025-04-01]
 #######################################################################################################
 
 # Exit script on any error
@@ -120,6 +120,16 @@ done
 if [ -z "$ESXI_HOST" ] || [ -z "$OVA_FILE" ] || [ -z "$DEFAILT_GW_IP" ] || [ -z "$IP_ADDRESS" ]; then
   echo "Error: --esxi_host, --ip, --gw and --ova parameters are required!"
   exit 1
+fi
+
+# Regexp for IP_ADDRESS/NETMASK 
+ip_regex='^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])/(3[0-2]|[12]?[0-9])$'
+
+if [[ $IP_ADDRESS =~ $ip_regex ]]; then
+    echo $(date +%Y-%m-%d_%H:%M:%S) "$IP_ADDRESS is a valid value for IP address. " >> $LOGFILE
+else
+    echo $(date +%Y-%m-%d_%H:%M:%S) "Error: $IP_ADDRESS is NOT a valid value for IP address! Exit.." | tee -a $LOGFILE
+    exit 1
 fi
 
 if [ ! -d "config" ]; then
