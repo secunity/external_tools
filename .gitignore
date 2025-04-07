@@ -1,0 +1,3 @@
+app_monitor/config.yaml
+venv/
+*.log

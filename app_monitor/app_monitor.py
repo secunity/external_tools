@@ -10,7 +10,7 @@ import logging
 
 # === Configuration ===
 APP_LIST = ["nginx", "redis"]  # Predefined applications
-CHECK_INTERVAL = 30  # seconds
+CHECK_INTERVAL = 5  # seconds
 FAILOVER_THRESHOLD = timedelta(minutes=5)
 
 # === Logging Setup ===
@@ -40,7 +40,8 @@ def get_application_status():
     return {app: "running" if is_process_running(app) else "not running" for app in APP_LIST}
 
 def get_peer_status(collection, peer_id):
-    return collection.find_one({"server_id": peer_id}, sort=[("timestamp", -1)])
+    # return collection.find_one({"server_id": peer_id}, sort=[("timestamp", -1)])
+    return collection.find_one({"server_id": peer_id})
 
 def should_become_active(peer_doc, peer_reachable):
     if not peer_doc:
@@ -53,30 +54,40 @@ def should_become_active(peer_doc, peer_reachable):
 
 def update_own_status(collection, server_id, mode, status):
     collection.update_one(
-        {"server_id": server_id},
-        {
-            "$set": {
+        {"server_id": "node1"},
+        {"$set": {
                 "timestamp": datetime.now(timezone.utc),
                 "mode": mode,
                 "applications": status
-            }
+                }
         },
         upsert=True
     )
+    
+# def init_mongo(collection, server_id):
+#     collection.insert_one(
+#         {
+#             "server_id": server_id,
+#             "timestamp": datetime.now(timezone.utc),
+#         }
+#     )
 
 # === Main ===
 
 def main():
     parser = argparse.ArgumentParser(description="Application Monitoring Script with Failover")
     parser.add_argument("--peer-ip", "-p", required=True)
+    parser.add_argument("--local-ip", "-l", required=True)
     parser.add_argument("--mongo-uri", "-m", required=True)
     parser.add_argument("--mongo-db", required=True)
     parser.add_argument("--mongo-collection", required=True)
     parser.add_argument("--mode", "-s", choices=["active", "passive"], help="Startup mode")
     args = parser.parse_args()
 
-    server_id = socket.gethostname()
-    peer_id = "node2" if server_id == "node1" else "node1"
+    # server_id = socket.gethostname()
+    # peer_id = "node2" if server_id == "node1" else "node1"
+    server_id = args.local_ip
+    peer_id = args.peer_ip
 
     client = MongoClient(args.mongo_uri)
     db = client[args.mongo_db]
@@ -87,33 +98,40 @@ def main():
     print("server_id: ", server_id)
     print("peer_id: ", peer_id)
     print("current_mode: ", current_mode)
-    print(socket.gethostbyname(socket.gethostname()))
+    print("local-ip: ", args.local_ip)
+    print("remote-ip: ", args.peer_ip)
     
-    exit(1)
-
+    # # create the new empty document on the mongo db
+    # try:
+    #     init_mongo(collection, server_id)
+    # except Exception as e:
+    #         logging.error(f"Error: {e}")
+            
     while True:
         try:
             # Determine peer state
             peer_doc = get_peer_status(collection, peer_id)
-            peer_reachable = check_peer_reachable(args.peer_ip)
+            print("peer_doc: ", peer_doc)
+            # peer_reachable = check_peer_reachable(args.peer_ip)
 
-            # If no fixed mode passed, calculate mode
-            if not args.mode:
-                if current_mode == "passive" and should_become_active(peer_doc, peer_reachable):
-                    logging.info("Switching to ACTIVE mode due to peer failure.")
-                    current_mode = "active"
-                elif current_mode == "active" and peer_doc and peer_reachable:
-                    # Optional: add logic to fall back to passive if peer recovers
-                    pass
+            # # If no fixed mode passed, calculate mode
+            # if not args.mode:
+            #     if current_mode == "passive" and should_become_active(peer_doc, peer_reachable):
+            #         logging.info("Switching to ACTIVE mode due to peer failure.")
+            #         current_mode = "active"
+            #     elif current_mode == "active" and peer_doc and peer_reachable:
+            #         # Optional: add logic to fall back to passive if peer recovers
+            #         pass
 
-            # Monitor applications
-            app_status = get_application_status()
+            # # Monitor applications
+            # app_status = get_application_status()
 
-            # In active mode, add peer monitoring (can be simulated or real via SSH, etc.)
-            if current_mode == "active":
-                peer_apps = {f"{app}_peer": "assumed down" for app in APP_LIST}
-                app_status.update(peer_apps)
+            # # In active mode, add peer monitoring (can be simulated or real via SSH, etc.)
+            # if current_mode == "active":
+            #     peer_apps = {f"{app}_peer": "assumed down" for app in APP_LIST}
+            #     app_status.update(peer_apps)
 
+            app_status = "OK"
             update_own_status(collection, server_id, current_mode, app_status)
             logging.info(f"Status updated: mode={current_mode}, apps={app_status}")
 
