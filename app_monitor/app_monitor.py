@@ -9,9 +9,10 @@ from pymongo import MongoClient
 import logging
 
 # === Configuration ===
-APP_LIST = ["nginx", "redis"]  # Predefined applications
-CHECK_INTERVAL = 5  # seconds
-FAILOVER_THRESHOLD = timedelta(minutes=5)
+APP_LIST = ["ssh", "python3"]           # Predefined applications list for monitoring
+CHECK_INTERVAL = 5                      # seconds
+# FAILOVER_THRESHOLD = timedelta(minutes=5)
+FAILOVER_THRESHOLD = 5 * 60             # Timeout 5 minutes
 
 # === Logging Setup ===
 logging.basicConfig(
@@ -43,34 +44,50 @@ def get_peer_status(collection, peer_id):
     # return collection.find_one({"server_id": peer_id}, sort=[("timestamp", -1)])
     return collection.find_one({"server_id": peer_id})
 
+# The failover logic conditions
 def should_become_active(peer_doc, peer_reachable):
-    if not peer_doc:
+    # print("should_become_active ENTER")
+    if not peer_doc:                                                                                # if no peer status
         return True
+    # if peer_doc.get('applications') != "OK":                                                        # if peer application status is not OK
+    #     return True
+    
+    # if ( all(peer_doc.get('applications')(app) == 'running' for app in APP_LIST) )
+    
+    # Проверка, что все приложения из APP_LIST имеют статус 'running'
+    # print("======================")
+    # print("peer_doc: ", peer_doc)
+    # print("peer_doc.get('applications'): ", peer_doc.get('applications'))
+    # print("======================")
+    peer_app_status = peer_doc.get('applications')
+    peer_all_running = all(peer_app_status.get(app) == 'running' for app in APP_LIST)
+    # print("all_running: ", all_running)
+
+    if peer_all_running:
+        print("All peer apps is running.")                                                          # DEBUG
+        # return False
+    else:
+        print("Not all peer apps is running.")                                                      # DEBUG
+        return True
+    
     last_heartbeat = peer_doc.get("timestamp")
-    if not last_heartbeat:
+    if not last_heartbeat:                                                                          # if there is no timestamp data
         return True
-    age = datetime.now(timezone.utc) - last_heartbeat
+    age = int(time.time()) - last_heartbeat                                                         # if last peer time older than FAILOVER_THRESHOLD
     return age > FAILOVER_THRESHOLD and not peer_reachable
 
 def update_own_status(collection, server_id, mode, status):
     collection.update_one(
-        {"server_id": "node1"},
+        {"server_id": server_id},
         {"$set": {
-                "timestamp": datetime.now(timezone.utc),
+                "time": datetime.now(timezone.utc),
+                "timestamp": int(time.time()),
                 "mode": mode,
                 "applications": status
                 }
-        },
+         },
         upsert=True
     )
-    
-# def init_mongo(collection, server_id):
-#     collection.insert_one(
-#         {
-#             "server_id": server_id,
-#             "timestamp": datetime.now(timezone.utc),
-#         }
-#     )
 
 # === Main ===
 
@@ -98,40 +115,34 @@ def main():
     print("server_id: ", server_id)
     print("peer_id: ", peer_id)
     print("current_mode: ", current_mode)
-    print("local-ip: ", args.local_ip)
-    print("remote-ip: ", args.peer_ip)
-    
-    # # create the new empty document on the mongo db
-    # try:
-    #     init_mongo(collection, server_id)
-    # except Exception as e:
-    #         logging.error(f"Error: {e}")
-            
+
     while True:
         try:
             # Determine peer state
             peer_doc = get_peer_status(collection, peer_id)
-            print("peer_doc: ", peer_doc)
-            # peer_reachable = check_peer_reachable(args.peer_ip)
+            print("peer_doc: ", peer_doc)                                                           # DEBUG
+            peer_reachable = check_peer_reachable(peer_id)                                          # ICMP reachebility
+            print("peer reacheble status: ", peer_reachable)                                        # DEBUG
 
-            # # If no fixed mode passed, calculate mode
-            # if not args.mode:
-            #     if current_mode == "passive" and should_become_active(peer_doc, peer_reachable):
-            #         logging.info("Switching to ACTIVE mode due to peer failure.")
-            #         current_mode = "active"
-            #     elif current_mode == "active" and peer_doc and peer_reachable:
-            #         # Optional: add logic to fall back to passive if peer recovers
-            #         pass
+            # If no fixed mode passed, calculate mode
+            if not args.mode:
+                if current_mode == "passive" and should_become_active(peer_doc, peer_reachable):
+                    logging.info("Switching to ACTIVE mode due to peer failure.")
+                    current_mode = "active"
+                    # TODO - active mode starting procedure
+                elif current_mode == "active" and peer_doc and peer_reachable:
+                    # Optional: add logic to fall back to passive if peer recovers
+                    pass
 
             # # Monitor applications
-            # app_status = get_application_status()
+            app_status = get_application_status()
+            print("app_status: ", app_status)                                                       # DEBUG
 
             # # In active mode, add peer monitoring (can be simulated or real via SSH, etc.)
             # if current_mode == "active":
             #     peer_apps = {f"{app}_peer": "assumed down" for app in APP_LIST}
             #     app_status.update(peer_apps)
-
-            app_status = "OK"
+            
             update_own_status(collection, server_id, current_mode, app_status)
             logging.info(f"Status updated: mode={current_mode}, apps={app_status}")
 
