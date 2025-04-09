@@ -1,4 +1,43 @@
 #!/usr/bin/env python3
+#######################################################################################################
+# Application Monitoring and Failover Script.
+# This Python script monitors specified applications' statuses and manages failover between two servers. 
+# It ensures high availability by switching roles between active and passive modes based on application 
+# health and peer server status. The script uses MongoDB to store and retrieve the statuses of both servers,
+# facilitating coordinated failover decisions..
+#
+# Usage:
+#   python3 app_monitor.py --peer-ip <PEER_IP> --local-ip <LOCAL_IP> --mongo-uri <MONGO_URI> 
+#                          --mongo-db <MONGO_DB> --mongo-collection <MONGO_COLLECTION> [--mode <MODE>]
+#
+# See the README file for the details
+# 
+# # Default values:
+# app_list: List of applications to monitor (default: ["ssh", "python3"]).
+# check_interval: Interval, in seconds, between health checks (default: 5 seconds).
+# failover_threshold: Time, in seconds, to wait before initiating failover (default: 300 seconds).
+# 
+# Example:
+#   python3 app_monitor.py --peer-ip 1.1.1.1 --mongo-uri 172.20.1.62 --mongo-db SeriesDB \
+#     --mongo-collection series -l 127.0.0.1
+#
+# Requirements:
+# Required Python Packages:
+#   argparse: For parsing command-line arguments.
+#   subprocess: For executing system commands.
+#   time, datetime, logging: Standard libraries for time tracking and logging.
+#   yaml: For reading the YAML configuration file. Install with pip install pyyaml.
+#   pymongo: For MongoDB interactions. Install with pip install pymongo.
+# MongoDB version 4.4.29 or newer.
+# System Utilities:
+#   pgrep
+#   pkill
+#   ping
+#
+# Author: Denis Chertkov, denis@chertkov.info
+# version 1.00
+# Date: [2025-04-10]
+#######################################################################################################
 
 import argparse
 import subprocess
@@ -53,14 +92,13 @@ def get_application_status():
     return all(peer_app_status.get(app) == 'running' for app in APP_LIST)
 
 def get_peer_status(collection, peer_id):
-    # return collection.find_one({"server_id": peer_id}, sort=[("timestamp", -1)])
     return collection.find_one({"server_id": peer_id})
 
 def update_own_status(collection, server_id, mode, status):
     collection.update_one(
         {"server_id": server_id},
         {"$set": {
-                "time": datetime.now(timezone.utc),                                                 # DEBUG
+                "time": datetime.now(timezone.utc),                                                 # DEBUG, can be deleted
                 "timestamp": int(time.time()),
                 "mode": mode,
                 "applications": status
@@ -69,19 +107,18 @@ def update_own_status(collection, server_id, mode, status):
         upsert=True
     )
 
-def remote_timestamp_check(peer_doc):
+def remote_timestamp_check(peer_doc, delta):
     last_heartbeat = peer_doc.get("timestamp")
     if not last_heartbeat:                                                                          # if there is no timestamp data
         return False
     age = int(time.time()) - last_heartbeat                                                         # if last peer time older than FAILOVER_THRESHOLD
-    print("time:")
-    print('int(time.time()): ', int(time.time()))
-    print('last_heartbeat: ', last_heartbeat)
-    print("age: ", age)
-    return age < FAILOVER_THRESHOLD
+    # print("time:")
+    # print('int(time.time()): ', int(time.time()))
+    # print('last_heartbeat: ', last_heartbeat)
+    # print("age: ", age)
+    return age < delta
 
 def remote_mode_check(peer_doc):
-    print("remote_mode_check!!")
     return peer_doc.get("mode")
 
 def get_peer_application_status(peer_doc):
@@ -89,7 +126,7 @@ def get_peer_application_status(peer_doc):
     return all(peer_app_status.get(app) == 'running' for app in APP_LIST)
 
 def switch_to_active():                                                                             # become active
-    print("switch_to_active!")
+    logging.info("Trying to switch to active mode!")
     # mv /data/spectorious/work/attacks_rt/attacks_checker.py.orig /data/spectorious/work/attacks_rt/attacks_checker.py
     try:
         subprocess.run(["mv", "/data/spectorious/work/attacks_rt/attacks_checker.py.orig", 
@@ -98,27 +135,32 @@ def switch_to_active():                                                         
         logging.info("Successfully switch_to_active!")
         return True
     except subprocess.CalledProcessError:
-        logging.info("Alert: can't switch_to_active!")
+        alert_cant_switch_to_active()
         return False
 
 def alert_cant_switch_to_active():                                                                  # need to become active, but not all apps is OK
-    print("alert_cant_switch_to_active!")
+    logging.info("Alert: can't switch to active!")
     return
 
+def alert_cant_switch_to_passive():                                                                  # need to become passive, but can't
+    logging.info("Alert: can't switch to passive!")
+    return
+
+
 def switch_to_passive():                                                                            # become passive
-    print("switch_to_passive!")
+    logging.info("Trying to switch to passive mnode!")
     if terminate_process("attacks_checker.py"):
         try:
             subprocess.run(["mv", "/data/spectorious/work/attacks_rt/attacks_checker.py", 
                             "/data/spectorious/work/attacks_rt/attacks_checker.py.orig"], 
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-            logging.info("Successfully switch_to_passive!")
+            logging.info("Successfully switched to the passive mode!")
             return True
         except subprocess.CalledProcessError:
-            logging.info("Alert: can't switch_to_passive!")
+            alert_cant_switch_to_passive()
             return False
     else:
-        logging.info("Alert: can't switch_to_passive!")
+        alert_cant_switch_to_passive()
         return False
     # mv /data/spectorious/work/attacks_rt/attacks_checker.py /data/spectorious/work/attacks_rt/attacks_checker.py.orig 
     # root@ubu-torik:/data/spectorious/work/attacks_rt# ps -fe | grep attacks_checker.py
@@ -152,18 +194,15 @@ def main():
     CHECK_INTERVAL = config.get('check_interval', DEFAULT_CHECK_INTERVAL)                           # seconds
     FAILOVER_THRESHOLD = config.get('failover_threshold', DEFAULT_FAILOVER_THRESHOLD)               # Timeout 5 minutes
     
-    # read_config()
-    print("=========================")
-    print("=========================")
+    print("======== DEBUG ==========")
     print("server_id: ", server_id)
     print("peer_id: ", peer_id)
     print("current_mode: ", current_mode)
     print("app_list: ", APP_LIST)
     print("check_interval: ", CHECK_INTERVAL)
     print("failover_threshold: ", FAILOVER_THRESHOLD)
-    print("=========================")
-    print("=========================")
-    
+    print("======== DEBUG ==========")
+   
     while True:
         try:
             # Determine peer state
@@ -171,37 +210,38 @@ def main():
                 peer_reachable = check_peer_reachable(peer_id)                                      # ICMP reachebility
                 # print("peer reachable status: ", peer_reachable)                                    # DEBUG
                 peer_doc = get_peer_status(collection, peer_id)
-                print("peer_doc: ", peer_doc)                                                       # DEBUG
+                # print("peer_doc: ", peer_doc)                                                       # DEBUG
             except Exception as e:
                 logging.error(f"Error: {e}")
                 timestamp_is_valid = False                                                          # no connectivity
                 peer_apps_is_OK = False
+                peer_mode = "passive"
             else:
                 if peer_doc is None:                                                                # no data from peer
                     timestamp_is_valid = False
                     peer_apps_is_OK = False
+                    peer_mode = "passive"
                 else:
                     
-                    timestamp_is_valid = remote_timestamp_check(peer_doc)
+                    timestamp_is_valid = remote_timestamp_check(peer_doc, FAILOVER_THRESHOLD)
                     peer_apps_is_OK = get_peer_application_status(peer_doc)
                     peer_mode = remote_mode_check(peer_doc)
-                    print("прорвались!")
             
             # all rest conditions
             mode_CLI = args.mode or None
             peer_is_reachable = peer_reachable
             local_apps_is_OK = get_application_status()
 
-            print("=========================")
-            print("current_mode: ", current_mode)
-            print("mode_CLI: ", mode_CLI)
-            print("peer_is_reachable: ", peer_is_reachable)
-            print("timestamp_is_valid: ", timestamp_is_valid)
-            print("local_apps_is_OK: ", local_apps_is_OK)
-            print("peer_apps_is_OK: ", peer_apps_is_OK)
-            print("peer_mode: ", peer_mode)
+            # print("======== DEBUG ==========")
+            # print("current_mode: ", current_mode)
+            # print("mode_CLI: ", mode_CLI)
+            # print("peer_is_reachable: ", peer_is_reachable)
+            # print("timestamp_is_valid: ", timestamp_is_valid)
+            # print("local_apps_is_OK: ", local_apps_is_OK)
+            # print("peer_apps_is_OK: ", peer_apps_is_OK)
+            # print("peer_mode: ", peer_mode)
             
-            # main mpde seletion algorithm
+            # main mode seletion algorithm
             if mode_CLI != "active":
                 if (not peer_is_reachable and not timestamp_is_valid and current_mode != "active"):
                     if local_apps_is_OK:
@@ -209,7 +249,7 @@ def main():
                             current_mode = "active"
                     else:
                         alert_cant_switch_to_active()
-                elif (current_mode == "passive" and peer_mode == "passive"):                        # возможно нужно исключить?
+                elif (current_mode == "passive" and peer_mode == "passive"):                        # if both nodes is passive switch to active
                     if local_apps_is_OK:
                         if switch_to_active():
                             current_mode = "active"
@@ -229,8 +269,6 @@ def main():
                 current_mode, app_status, mode_CLI, peer_is_reachable, timestamp_is_valid,
                 local_apps_is_OK, peer_apps_is_OK, peer_mode
             )
-
-
         except Exception as e:
             logging.error(f"Error: {e}")
 
