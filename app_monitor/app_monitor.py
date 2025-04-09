@@ -3,20 +3,24 @@
 import argparse
 import subprocess
 import time
-# import socket
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
+import yaml
 from pymongo import MongoClient
 import logging
 
-# === Configuration ===
-APP_LIST = ["ssh", "python3"]           # Predefined applications list for monitoring
-CHECK_INTERVAL = 5                      # seconds
-# FAILOVER_THRESHOLD = timedelta(minutes=5)
-FAILOVER_THRESHOLD = 5 * 60             # Timeout 5 minutes
+# === Default configuration and constants ===
+DEFAULT_APP_LIST = ["ssh", "python3"]           # Predefined applications list for monitoring
+DEFAULT_CHECK_INTERVAL = 5                      # seconds
+DEFAULT_FAILOVER_THRESHOLD = 5 * 60             # Timeout 5 minutes
+CONFIG_FILE_NAME = "app_monitor.yaml"           # Config file name
+LOG_FILE_NAME= "app_monitor.log"
+APP_LIST = ["ssh", "python3"]                   # applications list for monitoring
+CHECK_INTERVAL = 30                             # seconds
+FAILOVER_THRESHOLD = 5 * 60                     # Timeout 5 minutes
 
 # === Logging Setup ===
 logging.basicConfig(
-    filename='./app_monitor.log',
+    filename=LOG_FILE_NAME,
     level=logging.INFO,
     format='%(asctime)s %(levelname)s %(message)s'
 )
@@ -51,38 +55,6 @@ def get_application_status():
 def get_peer_status(collection, peer_id):
     # return collection.find_one({"server_id": peer_id}, sort=[("timestamp", -1)])
     return collection.find_one({"server_id": peer_id})
-
-# # The failover logic conditions
-# def should_become_active(peer_doc, peer_reachable):
-#     # print("should_become_active ENTER")
-#     if not peer_doc:                                                                                # if no peer status
-#         return True
-#     # if peer_doc.get('applications') != "OK":                                                        # if peer application status is not OK
-#     #     return True
-    
-#     # if ( all(peer_doc.get('applications')(app) == 'running' for app in APP_LIST) )
-    
-#     # Проверка, что все приложения из APP_LIST имеют статус 'running'
-#     # print("======================")
-#     # print("peer_doc: ", peer_doc)
-#     # print("peer_doc.get('applications'): ", peer_doc.get('applications'))
-#     # print("======================")
-#     peer_app_status = peer_doc.get('applications')
-#     peer_all_running = all(peer_app_status.get(app) == 'running' for app in APP_LIST)
-#     # print("all_running: ", all_running)
-
-#     if peer_all_running:
-#         print("All peer apps is running.")                                                          # DEBUG
-#         # return False
-#     else:
-#         print("Not all peer apps is running.")                                                      # DEBUG
-#         return True
-    
-#     last_heartbeat = peer_doc.get("timestamp")
-#     if not last_heartbeat:                                                                          # if there is no timestamp data
-#         return True
-#     age = int(time.time()) - last_heartbeat                                                         # if last peer time older than FAILOVER_THRESHOLD
-#     return age > FAILOVER_THRESHOLD and not peer_reachable
 
 def update_own_status(collection, server_id, mode, status):
     collection.update_one(
@@ -173,10 +145,25 @@ def main():
 
     current_mode = args.mode or "passive"
     
+    # read the configuration from yaml file
+    with open(CONFIG_FILE_NAME, 'r') as config_file:
+        config = yaml.full_load(config_file)
+    APP_LIST = config.get('app_list', DEFAULT_APP_LIST)                                             # Predefined applications list
+    CHECK_INTERVAL = config.get('check_interval', DEFAULT_CHECK_INTERVAL)                           # seconds
+    FAILOVER_THRESHOLD = config.get('failover_threshold', DEFAULT_FAILOVER_THRESHOLD)               # Timeout 5 minutes
+    
+    # read_config()
+    print("=========================")
+    print("=========================")
     print("server_id: ", server_id)
     print("peer_id: ", peer_id)
     print("current_mode: ", current_mode)
-
+    print("app_list: ", APP_LIST)
+    print("check_interval: ", CHECK_INTERVAL)
+    print("failover_threshold: ", FAILOVER_THRESHOLD)
+    print("=========================")
+    print("=========================")
+    
     while True:
         try:
             # Determine peer state
@@ -235,7 +222,14 @@ def main():
 
             app_status = {app: "running" if is_process_running(app) else "not running" for app in APP_LIST}
             update_own_status(collection, server_id, current_mode, app_status)
-            logging.info(f"Status updated: mode={current_mode}, apps={app_status}")
+            
+            logging.info(
+                "Status updated: mode=%s, apps=%s, mode_cli=%s, peer_is_reachable=%s, timestamp_is_valid=%s, "
+                "local_apps_is_ok=%s, peer_apps_is_ok=%s, peer_mode=%s",
+                current_mode, app_status, mode_CLI, peer_is_reachable, timestamp_is_valid,
+                local_apps_is_OK, peer_apps_is_OK, peer_mode
+            )
+
 
         except Exception as e:
             logging.error(f"Error: {e}")

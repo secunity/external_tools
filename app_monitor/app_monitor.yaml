@@ -1,0 +1,5 @@
+app_list:
+  - ssh
+  - python3
+check_interval: 5
+failover_threshold: 300
