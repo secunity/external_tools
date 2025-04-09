@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 #######################################################################################################
 # Application Monitoring and Failover Script.
-# This Python script monitors specified applications' statuses and manages failover between two servers. 
-# It ensures high availability by switching roles between active and passive modes based on application 
+# This Python script monitors specified applications' statuses and manages failover between two servers.
+# It ensures high availability by switching roles between active and passive modes based on application
 # health and peer server status. The script uses MongoDB to store and retrieve the statuses of both servers,
 # facilitating coordinated failover decisions..
 #
 # Usage:
-#   python3 app_monitor.py --peer-ip <PEER_IP> --local-ip <LOCAL_IP> --mongo-uri <MONGO_URI> 
+#   python3 app_monitor.py --peer-ip <PEER_IP> --local-ip <LOCAL_IP> --mongo-uri <MONGO_URI>
 #                          --mongo-db <MONGO_DB> --mongo-collection <MONGO_COLLECTION> [--mode <MODE>]
 #
 # See the README file for the details
-# 
+#
 # # Default values:
 # app_list: List of applications to monitor (default: ["ssh", "python3"]).
 # check_interval: Interval, in seconds, between health checks (default: 5 seconds).
 # failover_threshold: Time, in seconds, to wait before initiating failover (default: 300 seconds).
-# 
+#
 # Example:
 #   python3 app_monitor.py --peer-ip 1.1.1.1 --mongo-uri 172.20.1.62 --mongo-db SeriesDB \
 #     --mongo-collection series -l 127.0.0.1
@@ -35,7 +35,7 @@
 #   ping
 #
 # Author: Denis Chertkov, denis@chertkov.info
-# version 1.00
+# version 1.01
 # Date: [2025-04-10]
 #######################################################################################################
 
@@ -53,7 +53,7 @@ DEFAULT_CHECK_INTERVAL = 5                      # seconds
 DEFAULT_FAILOVER_THRESHOLD = 5 * 60             # Timeout 5 minutes
 CONFIG_FILE_NAME = "app_monitor.yaml"           # Config file name
 LOG_FILE_NAME= "app_monitor.log"
-APP_LIST = ["ssh", "python3"]                   # applications list for monitoring
+APP_LIST = []                                   # applications list for monitoring
 CHECK_INTERVAL = 30                             # seconds
 FAILOVER_THRESHOLD = 5 * 60                     # Timeout 5 minutes
 
@@ -87,12 +87,15 @@ def check_peer_reachable(ip):
     except subprocess.CalledProcessError:
         return False
 
+
 def get_application_status():
     peer_app_status = {app: "running" if is_process_running(app) else "not running" for app in APP_LIST}
     return all(peer_app_status.get(app) == 'running' for app in APP_LIST)
 
+
 def get_peer_status(collection, peer_id):
     return collection.find_one({"server_id": peer_id})
+
 
 def update_own_status(collection, server_id, mode, status):
     collection.update_one(
@@ -107,6 +110,7 @@ def update_own_status(collection, server_id, mode, status):
         upsert=True
     )
 
+
 def remote_timestamp_check(peer_doc, delta):
     last_heartbeat = peer_doc.get("timestamp")
     if not last_heartbeat:                                                                          # if there is no timestamp data
@@ -118,12 +122,15 @@ def remote_timestamp_check(peer_doc, delta):
     # print("age: ", age)
     return age < delta
 
+
 def remote_mode_check(peer_doc):
     return peer_doc.get("mode")
+
 
 def get_peer_application_status(peer_doc):
     peer_app_status = peer_doc.get('applications')
     return all(peer_app_status.get(app) == 'running' for app in APP_LIST)
+
 
 def switch_to_active():                                                                             # become active
     logging.info("Trying to switch to active mode!")
@@ -138,9 +145,11 @@ def switch_to_active():                                                         
         alert_cant_switch_to_active()
         return False
 
+
 def alert_cant_switch_to_active():                                                                  # need to become active, but not all apps is OK
     logging.info("Alert: can't switch to active!")
     return
+
 
 def alert_cant_switch_to_passive():                                                                  # need to become passive, but can't
     logging.info("Alert: can't switch to passive!")
@@ -166,8 +175,8 @@ def switch_to_passive():                                                        
     # root@ubu-torik:/data/spectorious/work/attacks_rt# ps -fe | grep attacks_checker.py
     # root        2966    2873  0 09:57 ?        00:00:05 python3 /data/spectorious/work/attacks_rt//attacks_checker.py
 
-# === Main ===
 
+# === Main ===
 def main():
     parser = argparse.ArgumentParser(description="Application Monitoring Script with Failover")
     parser.add_argument("--peer-ip", "-p", required=True)
@@ -188,11 +197,18 @@ def main():
     current_mode = args.mode or "passive"
     
     # read the configuration from yaml file
-    with open(CONFIG_FILE_NAME, 'r') as config_file:
-        config = yaml.full_load(config_file)
-    APP_LIST = config.get('app_list', DEFAULT_APP_LIST)                                             # Predefined applications list
-    CHECK_INTERVAL = config.get('check_interval', DEFAULT_CHECK_INTERVAL)                           # seconds
-    FAILOVER_THRESHOLD = config.get('failover_threshold', DEFAULT_FAILOVER_THRESHOLD)               # Timeout 5 minutes
+    try:
+        with open(CONFIG_FILE_NAME, 'r') as config_file:
+            config = yaml.full_load(config_file)
+        APP_LIST = config.get('app_list', DEFAULT_APP_LIST)                                             # Predefined applications list
+        CHECK_INTERVAL = config.get('check_interval', DEFAULT_CHECK_INTERVAL)                           # seconds
+        FAILOVER_THRESHOLD = config.get('failover_threshold', DEFAULT_FAILOVER_THRESHOLD)               # Timeout 5 minutes
+    except Exception as e:
+        logging.error(f"Error: {e}")
+        logging.error("The config file has not been loaded, use delaut values.")
+        APP_LIST = DEFAULT_APP_LIST                                                                     # Predefined applications list
+        CHECK_INTERVAL = DEFAULT_CHECK_INTERVAL                                                         # seconds
+        FAILOVER_THRESHOLD = DEFAULT_FAILOVER_THRESHOLD                                                 # Timeout 5 minutes
     
     print("======== DEBUG ==========")
     print("server_id: ", server_id)
