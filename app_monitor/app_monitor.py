@@ -35,7 +35,7 @@
 #   ping
 #
 # Author: Denis Chertkov, denis@chertkov.info
-# version 1.01
+# version 1.02
 # Date: [2025-04-10]
 #######################################################################################################
 
@@ -195,7 +195,8 @@ def main():
     collection = db[args.mongo_collection]
 
     current_mode = args.mode or "passive"
-    
+    mode_CLI = args.mode or None
+
     # read the configuration from yaml file
     try:
         with open(CONFIG_FILE_NAME, 'r') as config_file:
@@ -209,7 +210,7 @@ def main():
         APP_LIST = DEFAULT_APP_LIST                                                                     # Predefined applications list
         CHECK_INTERVAL = DEFAULT_CHECK_INTERVAL                                                         # seconds
         FAILOVER_THRESHOLD = DEFAULT_FAILOVER_THRESHOLD                                                 # Timeout 5 minutes
-    
+
     print("======== DEBUG ==========")
     print("server_id: ", server_id)
     print("peer_id: ", peer_id)
@@ -218,13 +219,12 @@ def main():
     print("check_interval: ", CHECK_INTERVAL)
     print("failover_threshold: ", FAILOVER_THRESHOLD)
     print("======== DEBUG ==========")
-   
+
     while True:
         try:
             # Determine peer state
             try:
                 peer_reachable = check_peer_reachable(peer_id)                                      # ICMP reachebility
-                # print("peer reachable status: ", peer_reachable)                                    # DEBUG
                 peer_doc = get_peer_status(collection, peer_id)
                 # print("peer_doc: ", peer_doc)                                                       # DEBUG
             except Exception as e:
@@ -238,13 +238,12 @@ def main():
                     peer_apps_is_OK = False
                     peer_mode = "passive"
                 else:
-                    
+
                     timestamp_is_valid = remote_timestamp_check(peer_doc, FAILOVER_THRESHOLD)
                     peer_apps_is_OK = get_peer_application_status(peer_doc)
                     peer_mode = remote_mode_check(peer_doc)
-            
+
             # all rest conditions
-            mode_CLI = args.mode or None
             peer_is_reachable = peer_reachable
             local_apps_is_OK = get_application_status()
 
@@ -256,7 +255,7 @@ def main():
             # print("local_apps_is_OK: ", local_apps_is_OK)
             # print("peer_apps_is_OK: ", peer_apps_is_OK)
             # print("peer_mode: ", peer_mode)
-            
+
             # main mode seletion algorithm
             if mode_CLI != "active":
                 if (not peer_is_reachable and not timestamp_is_valid and current_mode != "active"):
@@ -278,7 +277,7 @@ def main():
 
             app_status = {app: "running" if is_process_running(app) else "not running" for app in APP_LIST}
             update_own_status(collection, server_id, current_mode, app_status)
-            
+            # log the detailed status of the local and remote nodes
             logging.info(
                 "Status updated: mode=%s, apps=%s, mode_cli=%s, peer_is_reachable=%s, timestamp_is_valid=%s, "
                 "local_apps_is_ok=%s, peer_apps_is_ok=%s, peer_mode=%s",
@@ -289,6 +288,7 @@ def main():
             logging.error(f"Error: {e}")
 
         time.sleep(CHECK_INTERVAL)
+
 
 if __name__ == "__main__":
     main()
