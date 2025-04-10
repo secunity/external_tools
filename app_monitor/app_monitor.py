@@ -35,7 +35,7 @@
 #   ping
 #
 # Author: Denis Chertkov, denis@chertkov.info
-# version 1.02
+# version 1.03
 # Date: [2025-04-10]
 #######################################################################################################
 
@@ -52,10 +52,10 @@ DEFAULT_APP_LIST = ["ssh", "python3"]           # Predefined applications list f
 DEFAULT_CHECK_INTERVAL = 5                      # seconds
 DEFAULT_FAILOVER_THRESHOLD = 5 * 60             # Timeout 5 minutes
 CONFIG_FILE_NAME = "app_monitor.yaml"           # Config file name
-LOG_FILE_NAME= "app_monitor.log"
-APP_LIST = []                                   # applications list for monitoring
-CHECK_INTERVAL = 30                             # seconds
-FAILOVER_THRESHOLD = 5 * 60                     # Timeout 5 minutes
+LOG_FILE_NAME= "app_monitor.log"                # Log file name
+APP_LIST = []
+CHECK_INTERVAL = 30
+FAILOVER_THRESHOLD = 5 * 60
 
 # === Logging Setup ===
 logging.basicConfig(
@@ -205,11 +205,10 @@ def main():
         CHECK_INTERVAL = config.get('check_interval', DEFAULT_CHECK_INTERVAL)                           # seconds
         FAILOVER_THRESHOLD = config.get('failover_threshold', DEFAULT_FAILOVER_THRESHOLD)               # Timeout 5 minutes
     except Exception as e:
-        logging.error(f"Error: {e}")
-        logging.error("The config file has not been loaded, use delaut values.")
-        APP_LIST = DEFAULT_APP_LIST                                                                     # Predefined applications list
-        CHECK_INTERVAL = DEFAULT_CHECK_INTERVAL                                                         # seconds
-        FAILOVER_THRESHOLD = DEFAULT_FAILOVER_THRESHOLD                                                 # Timeout 5 minutes
+        logging.error(f"{e}")
+        logging.error("The config file has not been loaded, Abnormal program termination.")
+        print("The config file has not been loaded, Abnormal program termination.")
+        exit(127)
 
     print("======== DEBUG ==========")
     print("server_id: ", server_id)
