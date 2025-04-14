@@ -35,8 +35,8 @@
 #   ping
 #
 # Author: Denis Chertkov, denis@chertkov.info
-# version 1.03
-# Date: [2025-04-10]
+# version 1.05
+# Date: [2025-04-14]
 #######################################################################################################
 
 import argparse
@@ -64,7 +64,6 @@ logging.basicConfig(
     format='%(asctime)s %(levelname)s %(message)s'
 )
 
-# === Utility Functions ===
 
 def is_process_running(process_name):
     try:
@@ -73,12 +72,14 @@ def is_process_running(process_name):
     except subprocess.CalledProcessError:
         return False
 
+
 def terminate_process(process_name):
     try:
         subprocess.run(["pkill", "-f", process_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         return True
     except subprocess.CalledProcessError:
         return False
+
 
 def check_peer_reachable(ip):
     try:
@@ -94,21 +95,31 @@ def get_application_status():
 
 
 def get_peer_status(collection, peer_id):
-    return collection.find_one({"server_id": peer_id})
+    try:
+        doc = collection.find_one({"server_id": peer_id})
+        return doc
+    except Exception as e:
+        logging.error(f"{e}")
+        logging.error("Cooud not fetch the data from the MongoDB")
+        return None
 
 
 def update_own_status(collection, server_id, mode, status):
-    collection.update_one(
-        {"server_id": server_id},
-        {"$set": {
-                "time": datetime.now(timezone.utc),                                                 # DEBUG, can be deleted
-                "timestamp": int(time.time()),
-                "mode": mode,
-                "applications": status
-                }
-         },
-        upsert=True
-    )
+    try:
+        collection.update_one(
+            {"server_id": server_id},
+            {"$set": {
+                    "time": datetime.now(timezone.utc),                                             # DEBUG, can be deleted
+                    "timestamp": int(time.time()),
+                    "mode": mode,
+                    "applications": status
+                    }
+            },
+            upsert=True
+        )
+    except Exception as e:
+        logging.error(f"{e}")
+        logging.error("Cooud not update the data on the MongoDB")
 
 
 def remote_timestamp_check(peer_doc, delta):
@@ -139,7 +150,7 @@ def switch_to_active():                                                         
         subprocess.run(["mv", "/data/spectorious/work/attacks_rt/attacks_checker.py.orig", 
                         "/data/spectorious/work/attacks_rt/attacks_checker.py"], 
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-        logging.info("Successfully switch_to_active!")
+        logging.info("Successfully switched to active mode!")
         return True
     except subprocess.CalledProcessError:
         alert_cant_switch_to_active()
@@ -147,25 +158,25 @@ def switch_to_active():                                                         
 
 
 def alert_cant_switch_to_active():                                                                  # need to become active, but not all apps is OK
-    logging.info("Alert: can't switch to active!")
+    logging.info("Alert: can't switch to active mode!")
     return
 
 
-def alert_cant_switch_to_passive():                                                                  # need to become passive, but can't
-    logging.info("Alert: can't switch to passive!")
+def alert_cant_switch_to_passive():                                                                 # need to become passive, but can't
+    logging.info("Alert: can't switch to passive mode!")
     return
 
 
 def switch_to_passive():                                                                            # become passive
     logging.info("Trying to switch to passive mnode!")
-    if terminate_process("attacks_checker.py"):
-        try:
-            subprocess.run(["mv", "/data/spectorious/work/attacks_rt/attacks_checker.py", 
-                            "/data/spectorious/work/attacks_rt/attacks_checker.py.orig"], 
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+    reply = subprocess.run(["mv", "/data/spectorious/work/attacks_rt/attacks_checker.py",
+                            "/data/spectorious/work/attacks_rt/attacks_checker.py.orig"],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)                   # without exeption raising: ", check=True"
+    if reply.returncode == 0:
+        if terminate_process("attacks_checker.py"):
             logging.info("Successfully switched to the passive mode!")
             return True
-        except subprocess.CalledProcessError:
+        else:
             alert_cant_switch_to_passive()
             return False
     else:
@@ -210,14 +221,18 @@ def main():
         print("The config file has not been loaded, Abnormal program termination.")
         exit(127)
 
-    print("======== DEBUG ==========")
-    print("server_id: ", server_id)
-    print("peer_id: ", peer_id)
-    print("current_mode: ", current_mode)
-    print("app_list: ", APP_LIST)
-    print("check_interval: ", CHECK_INTERVAL)
-    print("failover_threshold: ", FAILOVER_THRESHOLD)
-    print("======== DEBUG ==========")
+    logging.info("The program is started")
+    logging.info("Current status is: server_id=%s, peer_id=%s, current_mode=%s, app_list=%s, check_interval=%s, failover_threshold=%s",
+                 server_id, peer_id, current_mode, APP_LIST, CHECK_INTERVAL, FAILOVER_THRESHOLD)
+
+    print("======== Current status ==========")
+    print("server_id:", server_id)
+    print("peer_id:", peer_id)
+    print("current_mode:", current_mode)
+    print("app_list:", APP_LIST)
+    print("check_interval:", CHECK_INTERVAL)
+    print("failover_threshold:", FAILOVER_THRESHOLD)
+    print("==================================")
 
     while True:
         try:
@@ -246,15 +261,6 @@ def main():
             peer_is_reachable = peer_reachable
             local_apps_is_OK = get_application_status()
 
-            # print("======== DEBUG ==========")
-            # print("current_mode: ", current_mode)
-            # print("mode_CLI: ", mode_CLI)
-            # print("peer_is_reachable: ", peer_is_reachable)
-            # print("timestamp_is_valid: ", timestamp_is_valid)
-            # print("local_apps_is_OK: ", local_apps_is_OK)
-            # print("peer_apps_is_OK: ", peer_apps_is_OK)
-            # print("peer_mode: ", peer_mode)
-
             # main mode seletion algorithm
             if mode_CLI != "active":
                 if (not peer_is_reachable and not timestamp_is_valid and current_mode != "active"):
@@ -276,6 +282,9 @@ def main():
 
             app_status = {app: "running" if is_process_running(app) else "not running" for app in APP_LIST}
             update_own_status(collection, server_id, current_mode, app_status)
+        except Exception as e:
+            logging.error(f"Error2: {e}")
+        finally:
             # log the detailed status of the local and remote nodes
             logging.info(
                 "Status updated: mode=%s, apps=%s, mode_cli=%s, peer_is_reachable=%s, timestamp_is_valid=%s, "
@@ -283,8 +292,6 @@ def main():
                 current_mode, app_status, mode_CLI, peer_is_reachable, timestamp_is_valid,
                 local_apps_is_OK, peer_apps_is_OK, peer_mode
             )
-        except Exception as e:
-            logging.error(f"Error: {e}")
 
         time.sleep(CHECK_INTERVAL)
 
