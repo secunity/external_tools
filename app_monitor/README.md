@@ -72,5 +72,5 @@ The script logs its operations to app_monitor.log, which can be reviewed for tro
 
 Denis Chertkov\
 denis\@chertkov.info\
-version 1.05\
-Date: [2025-04-14]
+version 1.07\
+Date: [2025-04-29]

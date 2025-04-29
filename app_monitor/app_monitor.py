@@ -35,14 +35,13 @@
 #   ping
 #
 # Author: Denis Chertkov, denis@chertkov.info
-# version 1.05
-# Date: [2025-04-14]
+# version 1.07
+# Date: [2025-04-29]
 #######################################################################################################
 
 import argparse
 import subprocess
 import time
-from datetime import datetime, timezone
 import yaml
 from pymongo import MongoClient
 import logging
@@ -109,7 +108,6 @@ def update_own_status(collection, server_id, mode, status):
         collection.update_one(
             {"server_id": server_id},
             {"$set": {
-                    "time": datetime.now(timezone.utc),                                             # DEBUG, can be deleted
                     "timestamp": int(time.time()),
                     "mode": mode,
                     "applications": status
@@ -189,6 +187,7 @@ def switch_to_passive():                                                        
 
 # === Main ===
 def main():
+    print("The Application Monitoring and Failover Script version 1.07 is started")
     parser = argparse.ArgumentParser(description="Application Monitoring Script with Failover")
     parser.add_argument("--peer-ip", "-p", required=True)
     parser.add_argument("--local-ip", "-l", required=True)
@@ -221,7 +220,7 @@ def main():
         print("The config file has not been loaded, Abnormal program termination.")
         exit(127)
 
-    logging.info("The program is started")
+    logging.info("The program version 1.07 is started")
     logging.info("Current status is: server_id=%s, peer_id=%s, current_mode=%s, app_list=%s, check_interval=%s, failover_threshold=%s",
                  server_id, peer_id, current_mode, APP_LIST, CHECK_INTERVAL, FAILOVER_THRESHOLD)
 
