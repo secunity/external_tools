@@ -233,6 +233,10 @@ def main():
     print("failover_threshold:", FAILOVER_THRESHOLD)
     print("==================================")
 
+    if mode_CLI != "active":
+        switch_to_passive()
+        current_mode = "passive"
+
     while True:
         try:
             # Determine peer state
