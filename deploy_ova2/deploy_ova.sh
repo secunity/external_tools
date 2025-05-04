@@ -26,7 +26,7 @@
 #   - ESXi host must be accessible and credentials must be valid.
 #
 # Author: Denis Chertkov, denis@chertkov.info
-# version 1.08
+# version 1.09
 # Date: [2025-05-04]
 #######################################################################################################
 
@@ -44,7 +44,7 @@ ESXI_USER="root"
 LOGFILE="output.log"
 DATASTORE=""
 
-echo $(date +%Y-%m-%d_%H:%M:%S) The script cersion 1.08 is started. > $LOGFILE
+echo $(date +%Y-%m-%d_%H:%M:%S) The script cersion 1.09 is started. > $LOGFILE
 
 
 if ! command -v tar &> /dev/null; then
@@ -240,6 +240,11 @@ echo $(date +%Y-%m-%d_%H:%M:%S) Creating the new OVA image Done! >> $LOGFILE
 
 echo $(date +%Y-%m-%d_%H:%M:%S) Starting the new VM deploy.. >> $LOGFILE
 ovftool/ovftool --noSSLVerify --name=$VM_NAME $DS_ARG --diskMode=thin --powerOn image/image.ova "vi://$ESXI_USER:$ESXI_PASSWORD@$ESXI_HOST" 2>&1 | tee -a $LOGFILE
+if [ $? -eq 0 ]; then
+  echo -n $(date +%Y-%m-%d_%H:%M:%S) The new image directory cleanup .. >> $LOGFILE
+  rm -f image/*.*
+  echo " Done!" >> $LOGFILE    
+fi
 # Log cleanup from progress lines
 sed -i '/ progress: /d' $LOGFILE
 echo $(date +%Y-%m-%d_%H:%M:%S) All tasks are done! | tee -a $LOGFILE
