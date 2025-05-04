@@ -5,7 +5,8 @@
 # setting up basic configurations such as VM name, network, and default gateway.
 #
 # Usage:
-#   ./deploy_ova.sh --esxi_host [ESXI_HOST] --esxi_user [ESXI_USER] --esxi_password [ESXI_PASSWORD] --ova [OVA_FILE] \
+#   ./deploy_ova.sh --esxi_host [ESXI_HOST] --esxi_user [ESXI_USER] --esxi_password [ESXI_PASSWORD] \
+#                   --ova [OVA_FILE] --ds [ESXI_DATASTORE] \
 #                   --vm_name [VM_NAME] --ip [IP_ADDRESS/NETMASK] --gw [DEFAILT_GW_IP]
 #
 # If --esxi_password option is not defined on the comand line, the password is prompted.
@@ -17,7 +18,7 @@
 #
 # Example:
 #   ./deploy_ova.sh --esxi_host 192.168.1.100 --esxi_user root --esxi_password mypassword --ova myvm.ova \
-#   --ip 172.20.20.18/24 --gw 172.20.20.1
+#   --ds LabDatastore1 --ip 172.20.20.18/24 --gw 172.20.20.1
 #
 # Requirements:
 #   - ovftool must be installed and available in the ./ovftool/ PATH.
@@ -25,8 +26,8 @@
 #   - ESXi host must be accessible and credentials must be valid.
 #
 # Author: Denis Chertkov, denis@chertkov.info
-# version 1.06
-# Date: [2025-04-01]
+# version 1.07
+# Date: [2025-05-04]
 #######################################################################################################
 
 # Exit script on any error
@@ -41,8 +42,9 @@ DEFAILT_GW_IP=""
 # Default values:
 ESXI_USER="root"
 LOGFILE="output.log"
+DATASTORE=""
 
-echo $(date +%Y-%m-%d_%H:%M:%S) The script cersion 1.05 is started. > $LOGFILE
+echo $(date +%Y-%m-%d_%H:%M:%S) The script cersion 1.07 is started. > $LOGFILE
 
 
 if ! command -v tar &> /dev/null; then
@@ -105,8 +107,12 @@ while [ $# -gt 0 ]; do
       DEFAILT_GW_IP="$2"
       shift 2
       ;;
+    --ds)
+      DATASTORE="$2"
+      shift 2
+      ;;
     --help)
-      echo "Usage: $0 --esxi_host [ESXI_HOST] --esxi_user [ESXI_USER] --esxi_password [ESXI_PASSWORD] --ova [OVA_FILE] --vm_name [VM_NAME] --ip [IP_ADDRESS/SUBNET] --gw [DEFAILT_GW_IP]"
+      echo "Usage: $0 --esxi_host [ESXI_HOST] --esxi_user [ESXI_USER] --esxi_password [ESXI_PASSWORD] --ova [OVA_FILE] --ds [DATASTORE] --vm_name [VM_NAME] --ip [IP_ADDRESS/SUBNET] --gw [DEFAILT_GW_IP]"
       exit 0
       ;;
     *)
@@ -117,8 +123,8 @@ while [ $# -gt 0 ]; do
 done
 
 # Check the mandatory options
-if [ -z "$ESXI_HOST" ] || [ -z "$OVA_FILE" ] || [ -z "$DEFAILT_GW_IP" ] || [ -z "$IP_ADDRESS" ]; then
-  echo "Error: --esxi_host, --ip, --gw and --ova parameters are required!"
+if [ -z "$ESXI_HOST" ] || [ -z "$OVA_FILE" ] || [ -z "$DEFAILT_GW_IP" ] || [ -z "$IP_ADDRESS" ] || [ -z "$DATASTORE" ]; then
+  echo "Error: --esxi_host, --ds, --ip, --gw and --ova parameters are required!"
   exit 1
 fi
 
@@ -179,12 +185,13 @@ network:
 EOF
 
 echo $(date +%Y-%m-%d_%H:%M:%S) Start deploying the VM with the next parameters: | tee -a $LOGFILE
-echo ESXi host: $ESXI_HOST
-echo ESXi user: $ESXI_USER
-echo ova: $OVA_FILE
-echo VM name: $VM_NAME
-echo IP: $IP_ADDRESS
-echo GW: $DEFAILT_GW_IP
+echo ESXi host: $ESXI_HOST | tee -a $LOGFILE
+echo ESXi user: $ESXI_USER | tee -a $LOGFILE
+echo ESXi datastore: $DATASTORE | tee -a $LOGFILE
+echo ova: $OVA_FILE | tee -a $LOGFILE
+echo VM name: $VM_NAME | tee -a $LOGFILE
+echo IP: $IP_ADDRESS | tee -a $LOGFILE
+echo GW: $DEFAILT_GW_IP | tee -a $LOGFILE
 echo
 
 echo -n $(date +%Y-%m-%d_%H:%M:%S) Prepearing the directory for the new image.. >> $LOGFILE
@@ -226,7 +233,7 @@ cd - > /dev/null
 echo $(date +%Y-%m-%d_%H:%M:%S) Creating the new OVA image Done! >> $LOGFILE
 
 echo $(date +%Y-%m-%d_%H:%M:%S) Starting the new VM deploy.. >> $LOGFILE
-ovftool/ovftool --noSSLVerify --name=$VM_NAME --diskMode=thin --powerOn image/image.ova "vi://$ESXI_USER:$ESXI_PASSWORD@$ESXI_HOST" 2>&1 | tee -a $LOGFILE
+ovftool/ovftool --noSSLVerify --name=$VM_NAME --datastore=$DATASTORE --diskMode=thin --powerOn image/image.ova "vi://$ESXI_USER:$ESXI_PASSWORD@$ESXI_HOST" 2>&1 | tee -a $LOGFILE
 # Log cleanup from progress lines
 sed -i '/ progress: /d' $LOGFILE
 echo $(date +%Y-%m-%d_%H:%M:%S) All tasks are done! | tee -a $LOGFILE

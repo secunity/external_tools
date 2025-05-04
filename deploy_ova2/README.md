@@ -9,7 +9,8 @@ This script automates the deployment of an OVA (Open Virtual Appliance) file to 
 To run the script, use the following command:
 
 ```
-./deploy_ova.sh --esxi_host [ESXI_HOST] --esxi_user [ESXI_USER] --esxi_password [ESXI_PASSWORD] --ova [OVA_FILE] \
+./deploy_ova.sh --esxi_host [ESXI_HOST] --esxi_user [ESXI_USER] --esxi_password [ESXI_PASSWORD] \
+                --ova [OVA_FILE] --ds [ESXI_DATASTORE] \
                 --vm_name [VM_NAME] --ip [IP_ADDRESS/NETMASK] --gw [DEFAULT_GW_IP]
 ```
 
@@ -19,6 +20,7 @@ To run the script, use the following command:
 - `--esxi_user [ESXI_USER]` - Username for ESXi authentication (default: `root`).
 - `--esxi_password [ESXI_PASSWORD]` - Password for ESXi authentication. If not provided, the script will prompt for it.
 - `--ova [OVA_FILE]` - Path to the OVA file that needs to be deployed.
+- `--ds [ESXI_DATASTORE]` - Target datastore name for a VI locator.
 - `--vm_name [VM_NAME]` - Name for the new virtual machine (default: OVA filename without extension).
 - `--ip [IP_ADDRESS/NETMASK]` - Static IP address and netmask for the VM (default: `192.168.1.100/24`).
 - `--gw [DEFAULT_GW_IP]` - Default gateway IP address.
@@ -29,7 +31,7 @@ Deploy a VM with specific network settings:
 
 ```
 ./deploy_ova.sh --esxi_host 192.168.1.100 --esxi_user root --esxi_password mypassword --ova myvm.ova \
-                --ip 172.20.20.18/24 --gw 172.20.20.1
+                --ds usbdrive --ip 172.20.20.18/24 --gw 172.20.20.1
 ```
 
 ## Requirements
@@ -53,5 +55,5 @@ To use this script, ensure the following dependencies are met:
 
 Denis Chertkov\
 denis\@chertkov.info\
-version 1.06\
-Date: [2025-03-28]
+version 1.07\
+Date: [2025-05-04]
