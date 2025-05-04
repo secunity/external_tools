@@ -20,7 +20,7 @@ To run the script, use the following command:
 - `--esxi_user [ESXI_USER]` - Username for ESXi authentication (default: `root`).
 - `--esxi_password [ESXI_PASSWORD]` - Password for ESXi authentication. If not provided, the script will prompt for it.
 - `--ova [OVA_FILE]` - Path to the OVA file that needs to be deployed.
-- `--ds [ESXI_DATASTORE]` - Target datastore name for a VI locator.
+- `--ds [ESXI_DATASTORE]` - Target datastore name for a VI locator. If not specified, the default ESXi datastore is used.
 - `--vm_name [VM_NAME]` - Name for the new virtual machine (default: OVA filename without extension).
 - `--ip [IP_ADDRESS/NETMASK]` - Static IP address and netmask for the VM (default: `192.168.1.100/24`).
 - `--gw [DEFAULT_GW_IP]` - Default gateway IP address.
@@ -55,5 +55,5 @@ To use this script, ensure the following dependencies are met:
 
 Denis Chertkov\
 denis\@chertkov.info\
-version 1.07\
+version 1.08\
 Date: [2025-05-04]

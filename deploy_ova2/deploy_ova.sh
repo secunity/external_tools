@@ -26,7 +26,7 @@
 #   - ESXi host must be accessible and credentials must be valid.
 #
 # Author: Denis Chertkov, denis@chertkov.info
-# version 1.07
+# version 1.08
 # Date: [2025-05-04]
 #######################################################################################################
 
@@ -44,7 +44,7 @@ ESXI_USER="root"
 LOGFILE="output.log"
 DATASTORE=""
 
-echo $(date +%Y-%m-%d_%H:%M:%S) The script cersion 1.07 is started. > $LOGFILE
+echo $(date +%Y-%m-%d_%H:%M:%S) The script cersion 1.08 is started. > $LOGFILE
 
 
 if ! command -v tar &> /dev/null; then
@@ -123,8 +123,8 @@ while [ $# -gt 0 ]; do
 done
 
 # Check the mandatory options
-if [ -z "$ESXI_HOST" ] || [ -z "$OVA_FILE" ] || [ -z "$DEFAILT_GW_IP" ] || [ -z "$IP_ADDRESS" ] || [ -z "$DATASTORE" ]; then
-  echo "Error: --esxi_host, --ds, --ip, --gw and --ova parameters are required!"
+if [ -z "$ESXI_HOST" ] || [ -z "$OVA_FILE" ] || [ -z "$DEFAILT_GW_IP" ] || [ -z "$IP_ADDRESS" ]; then
+  echo "Error: --esxi_host, --ip, --gw and --ova parameters are required!"
   exit 1
 fi
 
@@ -184,6 +184,12 @@ network:
   version: 2
 EOF
 
+if [ -n "$DATASTORE" ]; then
+    DS_ARG="--datastore=$DATASTORE"
+else
+    DS_ARG=""
+fi
+
 echo $(date +%Y-%m-%d_%H:%M:%S) Start deploying the VM with the next parameters: | tee -a $LOGFILE
 echo ESXi host: $ESXI_HOST | tee -a $LOGFILE
 echo ESXi user: $ESXI_USER | tee -a $LOGFILE
@@ -233,7 +239,7 @@ cd - > /dev/null
 echo $(date +%Y-%m-%d_%H:%M:%S) Creating the new OVA image Done! >> $LOGFILE
 
 echo $(date +%Y-%m-%d_%H:%M:%S) Starting the new VM deploy.. >> $LOGFILE
-ovftool/ovftool --noSSLVerify --name=$VM_NAME --datastore=$DATASTORE --diskMode=thin --powerOn image/image.ova "vi://$ESXI_USER:$ESXI_PASSWORD@$ESXI_HOST" 2>&1 | tee -a $LOGFILE
+ovftool/ovftool --noSSLVerify --name=$VM_NAME $DS_ARG --diskMode=thin --powerOn image/image.ova "vi://$ESXI_USER:$ESXI_PASSWORD@$ESXI_HOST" 2>&1 | tee -a $LOGFILE
 # Log cleanup from progress lines
 sed -i '/ progress: /d' $LOGFILE
 echo $(date +%Y-%m-%d_%H:%M:%S) All tasks are done! | tee -a $LOGFILE
