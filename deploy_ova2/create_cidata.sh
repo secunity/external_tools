@@ -1,4 +1,3 @@
-bash
 #!/bin/bash
 # create_cidata.sh - Generate cidata.iso with custom network settings
 # Usage: ./create_cidata.sh <IP/MASK> <GATEWAY>
