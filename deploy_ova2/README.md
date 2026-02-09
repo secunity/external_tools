@@ -51,6 +51,95 @@ To use this script, ensure the following dependencies are met:
 - The default values are applied if `--vm_name` or `--ip` are not explicitly provided.
 - The script assumes `ovftool` is in `./ovftool/`, but you may need to update the script if `ovftool` is installed elsewhere.
 
+---
+
+## Cloud-Init Data ISO (cidata.iso) Preparation
+
+The `cidata.iso` provides network configuration to the VM at first boot via cloud-init.
+
+### Prerequisites
+
+```bash
+sudo apt update && sudo apt install -y genisoimage
+```
+
+### Step-by-Step Instructions
+
+#### 1. Create working directory
+
+```bash
+mkdir -p ~/cidata-build && cd ~/cidata-build
+```
+
+#### 2. Create `meta-data`
+
+```bash
+cat > meta-data << 'EOF'
+instance-id: flowsec-local
+local-hostname: flowsec-vm
+EOF
+```
+
+#### 3. Create `user-data`
+
+```bash
+cat > user-data << 'EOF'
+#cloud-config
+bootcmd:
+  - echo "Cloud-init started" > /tmp/cidata.txt
+  - mount /dev/sr0 /mnt && cp /mnt/network.conf /etc/netplan/00-installer-config.yaml && umount /mnt
+  - netplan apply
+  - date >> /tmp/cidata.txt
+EOF
+```
+
+#### 4. Create `network.conf`
+
+Replace IP and gateway with your values:
+
+```bash
+cat > network.conf << 'EOF'
+network:
+  version: 2
+  ethernets:
+    ens160:
+      addresses:
+        - 192.168.1.100/24
+      gateway4: 192.168.1.1
+      nameservers:
+        addresses:
+          - 8.8.8.8
+EOF
+```
+
+#### 5. Generate the ISO
+
+```bash
+genisoimage -output cidata.iso -volid cidata -joliet -rock meta-data user-data network.conf
+```
+
+#### 6. Verify the ISO
+
+```bash
+ls -lh cidata.iso
+isoinfo -l -i cidata.iso
+```
+
+### Automated Script
+
+```
+```
+
+### ISO Contents Summary
+
+| File | Purpose |
+|------|---------|
+| `meta-data` | Instance identifier for cloud-init |
+| `user-data` | Boot commands to apply network configuration |
+| `network.conf` | Netplan network configuration (IP, gateway, DNS) |
+
+> **Note:** The volume label **must** be `cidata` for cloud-init to detect the datasource.
+
 ## Author
 
 Denis Chertkov\
